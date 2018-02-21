@@ -1,0 +1,33 @@
+Case Study: Analysis of NYSE stock data using RHadoop to 
+a) compute average weekly (52 weeks) stock prices for different stock labels. 
+b) identify top 10 stock labels that have the highest volumes (sum) of stocks traded.
+c) to identify which stock symbol had the highest fluctuation in price value on any given day.
+d) to compute aggregated average of daily mean value of stocks.
+
+Description: 
+The data set needed for this is given in a Stocks file named NYSE_Stocks.txt which is a comma separated text file with 812,989 records and 9 variables.
+Using the given data, please provide solutions in the form R scripts to the below questions.
+
+1. Write a mapreduce program to compute average weekly (52 weeks) stock prices for stock label "AIG" for the year 2001 and plot the output using visualization.
+
+2. Write a mapreduce program to identify top 10 stock labels that have the highest volumes (sum) of stocks traded in the year 2001. For these labels, 
+compute the total stock volumes traded in the year 2000 and compute the YOY percentage changes.
+
+3. Write a mapreduce program to identify which stock symbol had the highest fluctuation in price value on any given day? For this question, you should use 
+only 5 stock labels that are "AIG", "JNPR", "GE", "IBM", and “DIS".
+
+4. Write a mapreduce program to compute aggregated average of daily mean value of stocks. As a first step, you will try calculate the daily mean for each 
+line using the open and close prices. Then you need to group together all of the daily means for each stock symbol across multiple days and then compute 
+the aggregated average value for all stock symbols across all day.
+
+
+Data Dictionary - NYSE_Stocks.txt (column names listed in sequential order)
+- exchange: Exchange at which stock is being traded
+- stock_symbol: Symbol of the stock being traded
+- date: Date on which particular stock is traded
+- stock_price_open: Stock value at the opening of trading time
+- stock_price_high: Highest value of stock during trading time
+- stock_price_low: Lowest value of stock during trading time
+- stock_price_close: Closing value of the stock during trading time
+- stock_volume: Total volume of stock traded
+- stock_price_adj_close: Adjusted Close stock value
