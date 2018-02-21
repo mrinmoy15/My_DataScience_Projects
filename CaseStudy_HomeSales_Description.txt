@@ -1,0 +1,30 @@
+Case Study: Exploratory Data Analysis using RHadoop.
+
+Description:
+
+Here a data set called Home_Sales.txt contains information on homes sold in San Francisco between 2/13/2008 and 7/14/2009. 
+Using RHadoop tools EDA (data cleaning and data preparation) to be preformed. You have to make use of plyrmr package functions 
+for answering these questions unless mentioned otherwise.
+
+1. Write a mapreduce program to compute number of rows and columns present in the given dataset. 
+Additionally, find out the distribution of homes present across different neighborhoods present in the dataset. 
+
+2. Write a mapreduce program to compute quantile values of all the numeric variables present in the dataset like Price, 
+Bedroom, Squarefeet and Lotsize. Looking at the quantile outputs, please provide comments on the present outlier values if any. 
+
+3. Write a mapreduce program to identify the number of missing values present across all the variables in the dataset. 
+Additionally, please perform a missing value treatment on the “neighbourhood” variable if you notice any missing values. 
+For the missing value treatment, note that plyrmr package functions are not supported and you need to write a custom mapreduce program 
+using rmr2 syntax.
+
+
+Data Dictionary – Home_Sales.txt (column names listed in sequential order)
+- City: a factor with levels San Francisco
+- Zip: a numeric vector representing the zip code of the property
+- Date: a Date representing the sale date
+- Price: a numeric vector representing the sales price
+- Bedrooms: a numeric vector representing the number of bedrooms
+- Squarefeet: a numeric vector representing the interior area of the property, in square feet
+- Lotsize: a numeric vector representing the lot size of the property, in square feet
+- Builtyear: a numeric vector representing the year in which the property was built
+- Neighbourhood: a factor representing neighbourhood names
