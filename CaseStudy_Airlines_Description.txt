@@ -1,0 +1,71 @@
+Case Study: Analysing flight details for all commercial flights within the USA in January 2008:
+Data analysis is done using RHadoop to address the following questions:
+-To compute the total number of flights distributed across each day of the month.
+-To compute the total number of canceled flights operated by each airliner and the reason for Cancelation.
+-To identify the distribution of overall flight delay across various days of the month.
+-To compute total airtime and average distance metrics at Year, Month, DayofMonth and DayofWeek levels.
+-To identify which is the busiest route.
+
+
+Description: 
+
+Here a data set called Airlines.txt that consists of flight arrival and departure details for all commercial flights 
+within the USA in January 2008. Submit RHadoop code for the listed questions.
+You have to make use of plyrmr package functions for answering these questions unless mentioned otherwise.
+
+1. Write a mapreduce program to compute the total number of flights distributed across each day of the month. 
+Plot the final output using ggplot2 package functions.
+
+2. Write a mapreduce program to compute the total number of canceled flights operated by each airliner for the year 2008 
+and the reason for Cancelation. Plot the final output using ggplot2 package functions.
+
+3. Write a mapreduce program to identify the distribution of overall flight delay across various days of the month.
+Plot the final output using ggplot2 package functions. 
+
+4. Write a mapreduce program to compute total airtime and average distance metrics at Year,
+Month, DayofMonth and DayofWeek levels.
+
+5. Write a mapreduce program to identify which is the busiest route of all for the year 2008. Route
+can be achieved by using a combination of “Origin” and “Dest” variables.
+
+6. In 2008, which airliner recorded the highest number of diverted flights? For this airliner, compute
+the monthly averages of distance traveled by both normal and diverted flights for the year 2008?
+
+
+
+Data Dictionary - Airlines.txt (column names listed in sequential order)
+- Year: 1987-2008
+- Month: 1-12
+- DayofMonth: 1-31
+- DayOfWeek: 1 (Monday) - 7 (Sunday)
+- DepTime: actual departure time (local, hhmm)
+- CRSDepTime: scheduled departure time (local, hhmm)
+- ArrTime: actual arrival time (local, hhmm)
+- CRSArrTime: scheduled arrival time (local, hhmm)
+- UniqueCarrier: unique carrier code
+- FlightNum: flight number
+- TailNum: plane tail number
+- ActualElapsedTime: in minutes
+- CRSElapsedTime: in minutes
+- AirTime: in minutes
+- ArrDelay: arrival delay, in minutes
+- DepDelay: departure delay, in minutes
+- Origin: origin IATA airport code
+- Dest: destination IATA airport code
+- Distance: in miles
+- TaxiIn: taxi in time, in minutes
+- TaxiOut: taxi out time in minutes
+- Cancelled: was the flight cancelled?
+- CancellationCode: reason for cancellation (A = carrier, B = weather, C = NAS, D = security)
+- Diverted: 1 = yes, 0 = no
+- CarrierDelay: in minutes
+- WeatherDelay: in minutes
+- NASDelay: in minutes
+- SecurityDelay: in minutes
+- LateAircraftDelay: in minutes
+
+
+
+
+
+ 
