@@ -1,0 +1,8 @@
+Case study:Perform sentiment analysis using RHadoop to compute the general sentiment expressed in the netbook reviews?
+
+Description:
+
+This assignment is related to implementation of sentiment analysis on Hadoop data using RHadoop system.The data set needed for 
+this case study would be netbook reviews file named Netbook_Reviews.txt which is a text file with 15,065 records. It has only 
+one column which is related to a customer opinion expressed on various brands of netbooks. Write a mapreduce program to compute 
+the general sentiment expressed in the netbook reviews?
