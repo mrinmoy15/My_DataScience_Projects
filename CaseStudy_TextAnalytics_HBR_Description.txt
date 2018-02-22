@@ -1,0 +1,32 @@
+Case study:Perform text analytics using RHadoop on Harvard Business Review articles 
+-To compute the distribution of articles by various levels of document type attribute
+-To compute word frequencies from the text present in the Abstract attribute
+-To analyse how the usage of words in article abstracts has been changing over the years.
+
+Description:
+
+The data set needed for this part would be Harvard business review articles file named HBR_Abstracts.txt which is a tab separated text file 
+with 12,749 records and 9 variables. This data contains information about various articles published between 1922 and 2012 in Harvard business 
+review. You can make use of either rmr2 package functions or plyrmr package functions wherever applicable for answering these questions.
+
+1. Write a mapreduce program to compute the distribution of articles by various levels of document_type attribute? Also, find out average length 
+of article for each of the category present in document_type attribute?
+
+2. Write a mapreduce program to compute word frequencies from the text present in the Abstract attribute? Using the final output, plot a word 
+cloud visualization showcasing the most frequent words being used in the Abstract text.
+
+3. Write a mapreduce program to analyze how the usage of words in article abstracts has been changing over the years? For quantifying usage, 
+please consider only the top 5 highly occurring words amongst the articles for a particular year. Please plot the final output representing 
+the changing trend of words over the years.
+
+
+Data Dictionary – HBR_Abstracts.txt (column names listed in sequential order)
+- Id: Unique identifier of the article
+- Article_Title: Title of the article published in HBR
+- Source: Source would be single category i.e. Harvard Business Review
+- Pub_Date: Publishing date of the article on HBR
+- Volume: Publishing volume of HBR
+- Issue: Publishing issue of HBR
+- Page_Count: Length of the article in pages
+- Document_Type: Type of the article published i.e. article, case study, editorial etc.
+- Abstract: Abstract of the article published on HBR
