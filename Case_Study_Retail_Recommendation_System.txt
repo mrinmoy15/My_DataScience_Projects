@@ -1,0 +1,152 @@
+//-----------------------------------------------Case study for Spark: ML-Lib: Retail Store Recommendation System---------------------------------------------
+
+//------------------------------------------------Task 1. Get retail data : This is available as retail2013.csv, a comma separated file.----------------------
+
+// create a separate directory for this case study and copy the data to that directory.
+
+//------------------------------------------------Task 2. Load the data in Spark.--------------------------------------------------------------------------------
+sc.setLogLevel("ERROR")
+
+// Create a sqlContext
+val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+import sqlContext.implicits._
+
+// Import the necessary packages for macine learning
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.ml.recommendation._
+import org.apache.spark.ml.Pipeline
+import org.apache.spark.ml.PipelineModel
+import org.apache.spark.ml.feature.{IndexToString, StringIndexer}
+import org.apache.spark.ml.param.ParamMap
+import org.apache.spark.sql.DataFrame
+import org.apache.spark.rdd._
+import org.apache.spark.sql._
+
+
+//read the data
+val retailData = sc.textFile("hdfs://quickstart.cloudera:8020/user/cloudera/mrinmoy/ApacheSpark/Chapter7/CaseStudy2/retail_2013.csv")
+retailData.count
+retailData.take(1)
+
+/* Field1 : store id
+Field 2: Sale date time
+Field 3: A code for the item (Can be Naics code)
+Field 4: Kind of business store
+Field 5: Item Name
+Field 6: Item Cost
+Field 7: Customer Id
+Field 8: sub item number (If the customer bought multiple items at the same time) */
+
+//-----------------------------------------------Task 3. Create a map for the item names to get a unique number for each item.--------------------------------------
+/* Field number 5 in the data represents the item name (first field is field 1). Extract this field and get distinct item
+names. Then create a map to get a number for each name. This is required as the Spark Rating object requires a
+number for the product id. The zipWithIndex method in Spark is very useful for this.*/
+
+// Get the number of fields in data:
+val numfields = retailData.take(1)(0).split(',').length
+
+// Get distinct product
+val products = retailData.map(line => line.split(',')(4)).distinct.cache()
+products.take(5)
+products.foreach(println)
+
+// Create a map from products to their index. This is required to create an int field from products
+val productMap = products.zipWithIndex.collect.toMap
+
+//------------------------------------------------Task 4. Define a case class for the data frame.--------------------------------------------------------------------
+/* Since the ALS model requires two ints and a double, a case class
+cData is created with columns items Int, custId int and cnt Double.*/
+
+case class cData(items: Int, custid: Int, cnt: Double)
+
+//------------------------------------------------Task 5. Extract required fields and create a dataframe of cData rows.-----------------------------------------------
+
+val countData = retailData.map {x=>
+    val buffer = x.split(',')
+    cData(productMap(buffer(4)).toInt,buffer(6).toInt,1.0)
+}
+
+val countDF = countData.toDF()
+
+
+//------------------------------------------------Task 6. Create a temp table view with the above data frame-----------------------------------------------------------
+/* use a sql query to group the data and sum up the
+counts for each user id and product id. This will be a new data frame. Cache this data frame as it will be used for
+building the ALS model. You can check the few rows in this data frame using the show command:*/
+
+// Create a temp table and aggregate the counts for each item and customer
+
+countDF.registerTempTable("Rating")
+val gData = sqlContext.sql("select items,custid, sum(cnt) as cnt from Rating group by items,custid").cache()
+
+gData.show(5)
+
+//-------------------------------------------------Task 7. Build a recommendation model--------------------------------------------------------------------------------
+
+/* Since the ratings are implicit, use the setImplicitPrefs(true) for the ALS model. The ALS model
+takes following hyper parameters:
+
+Iterations : Number of iterations to try. More iterations may give better model but will take more time. You can
+start with 5 iterations.
+
+Lambda : A parameter to prevent overfitting. You can start with 0.01
+
+Alpha : Relative weight given to the ratings. You can start with 1.0
+
+You can experiment with different values to get different models.
+You also need to specify the columns for User, Item and Ratings. */
+
+
+// Specify hyper parameters for the model:
+val iterations = 5
+val lambda = 0.01
+val alpha = 1.0
+
+// Create an alternate least squares model
+val als = new ALS().setMaxIter(iterations).setRegParam(lambda).setUserCol("custid").setItemCol("items").setRatingCol("cnt").setImplicitPrefs(true).setAlpha(alpha)
+
+
+//---------------------------------------------------Task 8. Fit the model with the retail data.---------------------------------------------------------------------
+// The model provides a fit method to fit the model using our data. Use the data frame created in task 6 to fit the model.
+
+// Fit the model to training data
+val model = als.fit(gData)
+
+//--------------------------------------------------Task 9. Create a reverse map to get item names from number-------------------------------------------------------
+
+// Use the _swap method to create a reverse map of the map created in Task 3 above.
+
+// create a reverse map for products
+val productReverse = productMap.map(_.swap)
+
+
+//--------------------------------------------------Task 10. Define a function to get 5 recommendations for a given user using the model-----------------------------
+
+/* A spark function that takes user id as parameter is created for this. The ml library does not provide a direct
+method for recommending all the products for a given user. Instead it gives suggested rating for a user and a
+product. Use product map to create a data frame with given user id and all the product ids and a dummy rating.
+Use transform method of the model to get the predicted ratings. Order this by descending order of predicted
+ratings and choose the top 5. Use the reverse map to get the item names for the top 5 items and print them.*/
+
+
+//check recommendation for a user:
+def suggest_5products(user: Int) = {
+   val userDF = productMap.values.map(x=>cData(x.toInt,user,0.0)).toSeq.toDF()
+   val predict = model.transform(userDF)
+   val recommendations = predict.select("items").orderBy(desc("prediction")).head(5)
+   recommendations.map(x=>productReverse(x.getInt(0))).foreach(println)
+   
+}
+
+//--------------------------------------------------Task 11. Use the function to get 5 recommendations for the given users---------------------------------------------
+// test the above function for different users
+suggest_5products(43124)
+suggest_5products(99970)
+
+
+/* Case Study: Retail Store Recommendation System using Apache Spark ML Lib
+Description: A retail store has thousands of branches. They have a database of customer sale data collected from the POS(Point of Sale) terminals. They have 
+customers buying at a store as well as an online system to order items for immediate delivery. Whenever a customer logs into the system, a list of products need 
+to be shown as recommendation to the customer. Based on the existing users and products bought, recommend a list of products to the customer when the customer 
+logs into the system. Note that the recommendation is not based only on what the customer has bought before but also on what similar customers have bought.
+In this case study we use ALS based recommendation algorithm of Spark-MLLib to identify top 5 recomended product for a given customer */
