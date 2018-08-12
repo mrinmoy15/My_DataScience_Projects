@@ -1,0 +1,137 @@
+//---------------------------------------------------------CaseStudy: Correlation study of Stocks------------------------------------------------------------
+
+/*Data Set: The data set to be used for this case study is US Stock market data for 2016 for the 3 stocks (YHOO, AAPL, GOGO) and 2 indices (SNP, NDX). 
+The data is in a single comma delimited file with single column for each stock/index and single line for each working day of the year.
+
+The data will have five fields with the first one first three fields as stock values and last two fields as index values.
+*/
+
+//-------------------------------------------------Task 1. Get stock market data : This is available as stock_data.csv.--------------------------------------
+// create a separate directory for this case study and copy the stock_data.csv to that directory.
+
+//-------------------------------------------------Task 2. Load the data in Spark.---------------------------------------------------------------------------
+
+spark-shell
+
+// importing the required libraries
+sc.setLogLevel("ERROR")
+
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.stat.Statistics
+import org.apache.spark.rdd.RDD
+import org.apache.spark.mllib.linalg.Matrix
+import org.apache.spark.mllib.linalg.SingularValueDecomposition
+import org.apache.spark.mllib.linalg.Vector
+import org.apache.spark.mllib.linalg.Vectors
+import org.apache.spark.mllib.linalg.distributed.RowMatrix
+
+// Loading the data into an RDD
+
+val stockData = sc.textFile("hdfs://quickstart.cloudera:8020/user/cloudera/mrinmoy/ApacheSpark/Chapter7/CaseStudy5/stock_data.csv")
+stockData.count
+stockData.take(2)
+
+
+//-------------------------------------------------Task 3. Convert the data to a Vector.-------------------------------------------------------------------------
+
+/* As there are five fields in data delimited by comma character and all are decimal fields, you can split the data using comma delimiter, convert from String 
+to Double and convert to a dense vector.*/
+
+val stockRDD = stockData.map(d=>Vectors.dense(d.split(",").map(_.toDouble)))
+
+//------------------------------------------------Task 4. Evaluate the correlation matrix and print---------------------------------------------------------------
+
+/* Correlation method is available as part of mllib statistics package. It takes an RDD and the method to be used. There are two choices pearson and spearman. 
+We will use the pearson model this time.The method outputs a correlation matrix k x k where k is the number of columns in the input. The matrix is a symmetric 
+matrix with 1 in the diagonals. You can display the matrix by using the toString method on the matrix that takes the number of lines to print and the column width. 
+Since we have 5 rows and 5 columns, a width of 100 will be enough to print the 5 columns.You will see a strong correlation between the first stock value and 
+the SNP index.*/
+
+// Create and print the correlation matrix
+val correlMatrix: Matrix = Statistics.corr(stockRDD , "pearson")
+
+println(correlMatrix.toString(5,100))
+
+//-----------------------------------------------Task 5. Convert the stock data RDD to a row matrix.---------------------------------------------------------------
+
+/* As singular value decomposition works on a row matrix, we need to convert the RDD of vectors to a row matrix. Rowmatrix class provides a constructor that 
+takes an RDD of vectors and builds a row matrix. Use this constructor to get a row matrix. The row matrix will be of dimension 252x5 as there are 252 rows in 
+our data. */
+
+val mat: RowMatrix = new RowMatrix(stockRDD)
+
+
+//-----------------------------------------------Task 6. Build the SVD model---------------------------------------------------------------------------------------
+
+/* The svd model builder is available on the row matrix. Provide a k value of 5 so that we will get 5 important concepts from the data. 
+Input row matrix is of dimension 252x5. Include the parameter computeU = true so that the U matrix is also output. We will get three types 
+of outputs as follows:
+
+U : A distributed row matrix of dimension 252x5
+s : A diagonal matrix of dimension 5x5. Spark gives only a vector of size 5 that has all the diagonal values.
+V : A matrix of size 5x5. We will use this as the reduced dimension matrix for the stocks.
+
+you can access these values from the created model by using the methods U, s and V respectively.
+*/
+
+
+val svd: SingularValueDecomposition[RowMatrix, Matrix] = mat.computeSVD(5, computeU = true)
+
+//----------------------------------------------Task 7. Extract the three svd components---------------------------------------------------------------------------
+
+// These are extracted using the U, s and V methods of the svd model.
+
+val U: RowMatrix = svd.U
+val s: Vector = svd.s
+val V: Matrix = svd.V
+
+//----------------------------------------------Task 8. Check the three components---------------------------------------------------------------------------------
+//You can check the three components by printing them. You need to print them differently as they are different types.
+
+/* For U : Since it is a distributed row matrix of dimension 252x5, convert it to rows and take the first 5 rows to print.
+For s : Since it is a vector, you can type s and see the 5 values.
+For V : Sine it is matrix, you can use toString with number of lines and column width of 100 to print it.
+*/
+
+U.rows.take(5)
+println(V.toString(5,100))
+
+//---------------------------------------------Task 9. Convert the matrix V to an RDD of vectors-------------------------------------------------------------------
+ 
+/* We want to run correlation on the reduced dimension V (5x5 instead of 252x5). Correlation needs a RDD of Vector. We can convert the matrix to vector by first 
+converting the matrix to row iterator using the method rowIter and convert to a sequence using toSeq. This can be converted to an RDD of vectors by sc.parallelize
+*/
+
+// Convert the small matrix V to an RDD of vectors
+val vRDD = sc.parallelize( V.rowIter.toSeq)
+
+//--------------------------------------------Task 10. Run the correlation on the reduced RDD----------------------------------------------------------------------
+
+/* Apply the correlation function of Statistics package on the above RDD of vectors. This time we will use the spearman coefficient instead of pearson coefficient.*/
+
+// Find correlation from this RDD
+// This time use different coefficient
+
+val NMatrix: Matrix = Statistics.corr(vRDD , "spearman")
+
+//---------------------------------------------Task 11. Print the new correlation results-----------------------------------------------------------------------------
+
+/* Use the toString method with 5 lines and column width of 100 to print the correlation values. These values will be quite different from the values we printed 
+in task 4. This shows a weaker correlation among the values. */
+
+println(NMatrix.toString(5,100))
+
+/* CaseStudy:
+Description: A stock trader analyzes the stock market data regularly and needs to make decisions based on the historic data of a particular stock and also has to 
+check the variation of stock data based on other market parameters. Some of the market indices used for analysis are SNP (Standard and Poors index) and 
+NDX (Nasdaq stock market index). They also check the variation of the stock with other similar stocks.
+T
+he stock trader has collected data for the last one year for 3 stocks Yahoo, Google, Apple and also for SNP and NDX indices. This data has to be analyzed to 
+find the correlation among the stocks and want to see how Yahoo is behaving related to other stocks. The stock broker also wants to do singular value decomposition 
+to derive an importance of the factors.
+
+Problem: Parse the data and build a Vector. Find the correlation among the stocks and check the best co-relation for Yahoo stock. Also use singular value 
+decomposition to reduce the dimensionality to 5x5.
+
+*/
+
