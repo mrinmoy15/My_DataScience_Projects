@@ -1,0 +1,210 @@
+//-----------------------------------------------------Case study for Spark: ML-Lib: Network Intrusion Detection---------------------------------------------
+
+// This is the program for builiding a decision tree model and classifying network data.
+
+//------------------------------------------------- Task 1. Get KDD cup data (10% data for practice)---------------------------------------------------------
+ 
+// navigate to the working directory and enter the following command to download the dataset (This is the training dataset for the Machine Learning model)
+wget http://kdd.ics.uci.edu/databases/kddcup99/kddcup.data_10_percent.gz
+
+// By default, the "gunzip" command will decompress the file and the extension will be removed
+gunzip kddcup.data_10_percent.gz
+
+// Count lines in the file
+wc -l kddcup.data_10_percent
+
+// To list top data in the linux shell 
+head kddcup.data_10_percent
+
+// Download the names data: This data contains names of the fields(columns)
+wget https://kdd.ics.uci.edu/databases/kddcup99/kddcup.names
+
+// See the contents of the kddcup.names
+cat kddcup.names
+
+// place the files in hdfs
+
+//------------------------------------------------------Task 2. Load and parse the data in Spark--------------------------------------------------------------------
+
+spark-shell
+
+// to give warning messages
+sc.setLogLevel("WARN")
+
+// import all the necessary ML packages 
+
+import org.apache.spark.mllib.regression.LabeledPoint
+import org.apache.spark.mllib.regression._
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.mllib.evaluation._
+import org.apache.spark.mllib.tree._
+import org.apache.spark.mllib.tree.model._
+import org.apache.spark.rdd._
+
+// read the data
+val networkData = sc.textFile("hdfs://quickstart.cloudera:8020/user/cloudera/mrinmoy/ApacheSpark/Chapter7/CaseStudy1/kddcup.data_10_percent")
+networkData.take(1)
+networkData.count
+
+//------------------------------------------------------Task 3. Check the number of fields in data------------------------------------------------------------------
+val numfields = networkData.take(1)(0).split(',').length
+
+//------------------------------------------------------Task 4. Get the number of distinct labels and create a map.-------------------------------------------------
+
+//Get distinct lables: caching into memory as we are running an iterative ML algorithm.
+
+val labels = networkData.map(line=>line.split(',')(numfields - 1)).distinct.cache()
+labels.foreach(println)
+
+// Create a map from labels to their index. This is required to create a label point which needs double instead of string
+val labelMap = labels.zipWithIndex.collect.toMap
+
+/* create a map to get a unique number for each label. This is required as Spark uses decimal values only for Vectors and labeled points in Machine learning 
+algorithms. The zipWithIndex method on RDDs is very handy to achieve this. */
+
+//------------------------------------------------------Task 5. Parse the data to create an RDD of labeled points---------------------------------------------------
+/* Parse the comma separated data to :
+1. Remove the fields that have string values : Fields 1, 2 and 3.
+2. Remove and extract the last field as label
+3. Use the previously created map to get a unique number for each label
+4. Create a labeled point with the above numeric label and Vector of features
+*/
+
+val dataParsed = networkData.map{line => 
+                    val buffer = line.split(',').toBuffer
+                    buffer.remove(1,3)
+                    val labelType = buffer.remove(buffer.length-1)
+                    val dataVector = Vectors.dense(buffer.map(_.toDouble).toArray)
+                    LabeledPoint(labelMap(labelType).toDouble,dataVector)
+                  }
+
+/* A labeled point is a local vector, either dense or sparse, associated with a label/response. In MLlib, labeled points are used in supervised learning algorithms. 
+We use a double to store a label, so we can use labeled points in both regression and classification. For binary classification, a label should be either 
+0 (negative) or 1 (positive). For multiclass classification, labels should be class indices starting from zero: 0, 1, 2, ....*/
+
+
+//------------------------------------------------------Task 6. Divide the data into build and test-------------------------------------------------------------------
+/* divide the data into two parts : 90% for training and 10% for testing. Use the readily available randomSplit method of Spark to do this.*/
+
+// Split data into two parts and cache in memory
+
+val Array(trainData,testData) = dataParsed.randomSplit(Array(0.90,.10))
+trainData.cache()
+testData.cache()
+
+
+//-----------------------------------------------------Task 7. Build a decision tree model-----------------------------------------------------------------------------
+
+/* Now we are set to build our first decision tree model. Use the DecisionTree.trainClassifier method of Spark machine learning library to build the model. 
+The model takes some hyper parameters as below:
+	training data : An RDD of labeled points
+	Number of distinct labels : Number of classifications in data
+	A map for category features: This is to specify how many distinct values are there for each category feature. A map from Int to Int is expected. 
+                                     We will not use this and specify an empty map.
+	An impurity evaluation method: Currently two methods are available, “gini” and “entropy”. You can use either of them to build the model. 
+                                       Use “gini” for the first model.
+	Maximum depth of tree to build: This is the depth of the decision tree built. Specifying too high a depth will need more memory and time and 
+                                        also may cause the tree to over fit the data. Use a depth of 4 for this example.
+	Maximum number of bins : This is how many memory bins to be used by the algorithm which is the same as number of decision rules to try. 
+                                 A higher value will need more memory and processing power and may result in a better model. Use 100 in this example.
+*/
+
+
+val numLabels : Int = labels.count.toInt
+val maxDepth = 4
+val numBins = 100
+val impurity = "gini"
+val category_features = Map[Int,Int]()
+
+val model = DecisionTree.trainClassifier(trainData, numLabels, category_features,impurity,maxDepth,numBins)
+
+//----------------------------------------------------Task 8. Check the accuracy of the model---------------------------------------------------------------------------
+
+/* Once the model is built, we need to use the test data to evaluate the accuracy of the model. Spark provides the multiClassMetrics API to evaluate the 
+classification based on the predicted labels and actual labels. There are different measures defined like below:
+	1. Confusion matrix: An NxN matrix of number of cases of predicted value vs actual value. Each row in confusion matrix represents an actual value 
+                             and each column represents the predicted value. The diagonal of the confusion matrix represents the ‘True Positives’ where the 
+                             actual value matches the predicted value.
+	2. Precision: This is a percentage number where the true positives occur. This will be the sum of the values in the diagonal of the confusion matrix 
+                      divided by the total number of values. A higher percentage refers to a better model.
+
+First build a matrix of predicted labels for the test data to the actual lablels. You can use the predict function of the model to predict the label for 
+the features. Then pass this matrix to multiClassMetrics API to get the metrics object. From the metrics object, print out the confusion matrix 
+and the precision. */ 
+
+val testPrediction = testData.map(x=>(model.predict(x.features),x.label))
+
+val metrics = new MulticlassMetrics(testPrediction)
+
+metrics.confusionMatrix
+
+metrics.precision
+
+//------------------------------------------------------Task 9. Refine the model with different impurity.--------------------------------------------------------------
+
+val impurity = "entropy"
+val model2 = DecisionTree.trainClassifier(trainData, numLabels, category_features,impurity,maxDepth,numBins)
+
+val testPrediction2 = testData.map(x=>(model2.predict(x.features),x.label))
+
+val metrics2 = new MulticlassMetrics(testPrediction)
+
+println(metrics2.confusionMatrix)
+
+metrics2.precision
+
+//-------------------------------------------------------Task 10. Create a reverse map from decimal labels to string labels.------------------------------------------
+
+/* The model has decimal labels where as we originally have human readable labels. So from the distinct label map we created earlier, create a reverse map that 
+gives the string labels given the numbers. Use this reverse map to check the predicted labels for some of the test data. Scala provides a swap method on the 
+map to reverse the map. */
+
+//check the predictions
+// swaping the key value in the map
+val labelReverse = labelMap.map(_.swap)
+
+val valPrediction3 = testData.map(x=>(x,labelReverse(model.predict(x.features).toLong),labelReverse(x.label.toLong)))
+valPrediction3.take(5)
+
+// showing only inaccurate predictions
+valPrediction3.filter(x=>(x._2 != x._3)).take(5)
+
+//----------------------------------------------Task 11. Load the normal data shown above, parse and predict the classification labels using the model.---------------
+
+// Write a function to load a file, parse and predict classification
+
+def classify(file: String, model: DecisionTreeModel) : RDD[String] = {
+     val currentData = sc.textFile(file)
+     //parse data
+     val currentParsed = currentData.map{ line=>
+         val buffer = line.split(',').toBuffer
+         buffer.remove(1,3)
+         Vectors.dense(buffer.map(_.toDouble).toArray)
+     }
+     // predict labels using model
+     val currentPredictions = currentParsed.map(x=>model.predict(x))
+     // convert labels to readable strings
+     return currentPredictions.map(x=>labelReverse(x.toLong))
+
+}
+
+
+// Run the function for given data
+val currentLabels = classify("hdfs://quickstart.cloudera:8020/user/cloudera/mrinmoy/ApacheSpark/Chapter7/CaseStudy1/Dataset.txt",model)
+
+// print the output labels
+currentLabels.foreach(println)
+
+//exit spark shell
+:quit
+
+
+/* CaseStudy: Network Intrusion Detection using Spark ML-Lib
+Description: Today’s connected networks pose a great threat to security and security experts have to be on the edge all the time to detect patterns 
+in network intrusion. Sifting through tons of security data to look for an attack is like looking for a pin in a haystack. The network data collected 
+over a period is analyzed and classified into different types of attacks. This data can be used to detect future attacks by matching the current network 
+data with the classified data. In this case study with the existing threat data from Kdd site, we build a model that can predict and classify a network 
+connection as a particular threat. Using this model, we can predict the classification for a given set of records. */
+
+//-------------------------------------------------------------**************END************************--------------------------------------------------------------
+
