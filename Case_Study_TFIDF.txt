@@ -1,0 +1,213 @@
+//-------------------------------------------CaseStudy: TextMining using Apache Spark (Most relevant terms in documents)-------------------------------------
+
+/* Text Processing and semantic analysis: 
+Two factors are used extensively in analyzing text documents to understand the hidden semantics in documents. These are Term frequency and 
+Inverse document frequency, popularly referred to as TF-IDF. These are explained below:
+
+Term Frequency (TF) : This refers to how many times each word occurs in a document. This measure shows how important a term is to the document.
+
+Inverse Document Frequency (IDF) : If a term is present in all the documents, then it may not be relevant to just one document. 
+So inverse document frequency is used to reduce the effect of terms that are common in the language. It is calculated as:
+                                
+                           log[ No.of documents + 1 )/ (No.of documents in which the term occurs + 1)]
+*/
+
+
+/* Following ML library methods are available for use in the project.
+
+RegexTokenizer : This converts each text document into array of words. The pattern specified as a regular expression is extracted. 
+For example the pattern \W extracts all words so that spaces and punctuation characters can be excluded.
+
+StopWordsRemover : This removes the common stop words from the array of words. Stop words are words like is, are, a, an, the etc that do not add meaning 
+to the document. The default setting removes the English language stop words.
+
+CountVectorizerModel : This model builds a term frequency matrix by assigning a unique number to each distinct word. There is an alternative in using 
+hashing TF model but CountVectorizerModel provides us a vocabulary that can be used to reverse map the indices back to unique words.
+
+IDF : This model calculates the IDF and provides TF * IDF for each document and term, so that we don’t have to calculate the product separately.
+
+*/
+
+
+//-------------------------------------------------------Task 1. Get Wikipedia data : This is available as wikidocs.zip.-------------------------------------
+
+/* create a separate directory for this case study like casestudy4 and copy the wikidocs.zip to that directory and unzip. 
+The unzipped files will be in wikidocs directory as .txt files.
+
+//-------------------------------------------------------Task 2. Load the data in Spark.---------------------------------------------------------------------
+
+// Create a sqlContext
+val sqlContext = new org.apache.spark.sql.SQLContext(sc)
+import sqlContext.implicits._
+
+// Importing the required packages
+
+sc.setLogLevel("ERROR")
+import org.apache.spark.ml.feature.{HashingTF, IDF}
+import org.apache.spark.ml.feature.{Tokenizer, RegexTokenizer}
+import org.apache.spark.ml.feature.StopWordsRemover
+import org.apache.spark.mllib.linalg._
+import org.apache.spark.sql._
+import org.apache.spark.sql.types._
+import org.apache.spark.ml.feature.CountVectorizerModel
+import org.apache.spark.ml.feature.CountVectorizer
+import scala.collection.mutable.WrappedArray
+
+
+// read all the files
+val wikif = sc.wholeTextFiles("hdfs://quickstart.cloudera:8020/user/cloudera/mrinmoy/ApacheSpark/Chapter7/CaseStudy4/wikidocs/*.txt")
+wikif.count
+wikif.take(1)
+
+// Remove path from the file name
+val wiki = wikif.map{case(name,doc)=>(name.substring(name.lastIndexOf("/")+1),doc)}
+wiki.take(1)
+
+//-----------------------------------------------------Task 3. Convert the data to dataframe.------------------------------------------------------------------
+
+/* As there are two fields in data, you can give the fields the names as (name , doc). Since the text is in free form, no need to format the data as 
+in other case studies. */
+
+val filedata = wiki.toDF("label","doc")
+filedata.head(5)
+
+//----------------------------------------------------Task 4. use RegexTokenizer to convert the data into a bag of words.-------------------------------------
+
+/* Steps required are:
+1. Create the RegexTokenizer model with input column (doc) and output column (allwords)
+2. Fit the model with the documents dataframe
+3. Transform the documents data with the fitted model
+*/
+
+// convert document to bag of words
+val tokenizer = new RegexTokenizer().setInputCol("doc").setOutputCol("allwords").setPattern("\\W")
+val allWordsData = tokenizer.transform(filedata)
+
+// To check the class of a variable
+allWordsData.getClass
+
+// To show the data
+allWordsData.show(3)
+
+//--------------------------------------------------Task 5. Use StopWordsRemover to remove the stop words from the bag of words--------------------------------
+
+/* Steps required are:
+1. Create the StopWordsRemover model with input column (allwords) and output column (words)
+2. Transform the words data with the model
+*/
+
+
+// remove stop words
+val remover = new StopWordsRemover().setInputCol("allwords").setOutputCol("words")
+val wordsData = remover.transform(allWordsData)
+wordsData.show(3)
+
+//-------------------------------------------------Task 6. Build a subset of data by selecting only label and words columns--------------------------------------
+
+/* This can be done by select on the dataframe with label and words columns. */
+
+// Get a subset of data 
+
+val nwordsData = wordsData.select($"label",$"words")
+nwordsData.show(3)
+
+//------------------------------------------------Task 7. Build a Term Frequency matrix by using CountVectorizer Model. Check the vocabulary built-----------------
+
+/* Steps required are:
+1. Create the CountVectorizer model with input column (words) and output column (rawFeatures)
+2. Fit the model with the above subset dataframe
+3. Check the number of words in the vocabulary of the model (You may see as high as 25500 words)
+4. Transform the subset data with the fitted model
+*/
+
+// Build a term frequency matrix. Also check the vocabulary
+val cvModel: CountVectorizerModel = new CountVectorizer().setInputCol("words").setOutputCol("rawFeatures").fit(nwordsData)
+cvModel.vocabulary.length
+val cvm = cvModel.transform(nwordsData)
+cvm.show(5)
+
+
+//------------------------------------------------Task 8. Build a Inverse document frequency model using IDF.------------------------------------------------------
+
+/*Steps required are:
+1. Create the IDF model with input column (rawFeatures) and output column (features)
+2. Fit the model with the above dataframe
+3. Transform the above data with the fitted model
+*/
+
+// Build the Inverse document frequency
+val idf = new IDF().setInputCol("rawFeatures").setOutputCol("features").fit(cvm)
+val tfIDFData = idf.transform(cvm)
+tfIDFData.show(5)
+
+// Now we have the model built and applied to our data. Next we need to extract information from the model and show the relevant terms.
+
+//----------------------------------------------Task 9. Create a function to extract the top words given the vocabulary and the TF*IDF data.---------------------------
+
+/*Note that so far we have :
+Vocabulary which is the list of all the distinct words from all the documents available in the CountVectorizerModel built in Task 7 above.
+
+The TFIDF data for each document available in the dataframe as a sparse matrix in the features column. The sparse matrix has two arrays: 
+an indices array that is an index to the vocabulary and a TFIDF array that has TFIDF number as a double value for each index within that document. 
+For example if the vocabulary has 1000 words, then the indices can be from 0 to 999. If document 1 has two words “Spark” and “predicts” that map 
+to index 4 and 25 in the vocabulary, then the indices array for that row in the dataframe will have two integers 4 and 25. The IFIDF array will 
+have two double values (0.29 and 0.69 for example).
+*/
+
+// Return an array of strings given an array of indices and an array of TFIDF. An array of vocabulary strings is also required.
+
+def findf2(vocab: Array[String],words: Array[Int], idfs: Array[Double], num:Int) : Array[String] = {
+ val mp : scala.collection.mutable.Map[Double, List[Int]] = scala.collection.mutable.Map[Double,List[Int]]()
+// map the TFIDF to list of indices as multiple indices may have the same IFIDF value
+    for(i<- 0 until words.length) {
+        if(mp.contains(idfs(i))) {
+             mp(idfs(i)) =  words(i) :: mp(idfs(i))
+        } else {
+              mp(idfs(i)) =  words(i) :: Nil
+        }
+    }
+   // from the map, take the top n keys
+     val keys=mp.keys.toSeq.sorted.reverse.take(num)
+   // for the top n keys, get the words from vocab
+   // limit the words to n
+     val out : Array[String] = new  Array[String] (num)
+     var start = 0;
+     for(i<- keys) {
+         for(str<-mp(i)) { //go through List of indices
+             out(start) = vocab(str)
+             start += 1
+             if(start >= num) return out;
+         }
+     }
+     return out
+}
+
+//-------------------------------------------------------Task 10. Extract and print the top 10 most relevant terms for each document.--------------------------------
+
+/* Use the print schema to check the schema of the dataframe created in task 9. Use a map to call the function created in task 9 for each row of the dataframe. 
+Include the label from the dataframe also in the output so that you have the filename and the list of words. Make sure your Row specification in the map matches 
+the schema exactly. Otherwise you will get matching errors when you use show. For the words column that shows as Array of string, Spark actually uses an unwrapped 
+array which gives problems in matching. So use the Seq[String] instead of Array[String] for this column. This may give a warning but will work properly.
+
+You an use the show command on the resulting dataframe to check the words for each file.*/
+
+// Apply the function to extract the top words.
+
+// Top 10 is specified below but you can change that.
+tfIDFData.printSchema 
+val strings = tfIDFData.map{ case Row(label:String, words:Seq[String], rawFeatures:SparseVector, features:SparseVector)=> (label, findf2(cvModel.vocabulary,features.indices,features.values,10))}
+val stringsDF = strings.toDF("doc","top_10_words")
+
+// Show the top 10 document data
+strings.show(10,false)
+
+
+/* CaseStudy: Most relevant terms in documents using Apache Spark ML-Lib
+Description: Wikipedia is an ocean of information and has hundreds of documents on many subjects. These documents can be downloaded and used for text mining to 
+find lot of useful information. A manufacturing organization has collected the Wikipedia documents about manufacturing category and has lot text files that 
+constitute the articles about manufacturing in Wikipedia. The organization wants to analyze these documents and extract the most relevant terms used in these 
+documents so that they can use them in their web sites. This will use the text documents extracted from Wikipedia and use the TF/IDF based text processing 
+algorithms from Spark-MLLib.
+
+Problem: Analyze the text documents and for each document produce a list of ten most relevant terms in the document.
+*/
