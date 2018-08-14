@@ -1,0 +1,70 @@
+// Creating a database
+CREATE DATABASE mrinmoycasestudy;
+
+// use database
+USE mrinmoycasestudy
+SET hive.cli.print.current.db = true;
+
+// get info of the database
+DESCRIBE DATABASE mrinmoycasestudy
+
+// Create Table
+CREATE TABLE bat_tbl 
+(
+    playerID STRING,
+    yearID INT,
+    stint INT,
+    teamID STRING,
+    lgID STRING,
+    G INT,
+    G_batting INT,
+    AB INT,
+    R INT,
+    H INT,
+    Two_B INT,
+    Three_B INT,
+    HR INT,
+    RBI INT,
+    SB INT,
+    CS INT,
+    BB INT,
+    SO INT,
+    IBB INT,
+    HBP INT,
+    SH INT,
+    SF INT,
+    GIDP INT,
+    G_old INT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+LINES TERMINATED BY '\n'
+TBLPROPERTIES("skip.header.line.count"="1");
+
+
+// Describe Table
+DESCRIBE bat_tbl;
+
+
+//Load the Data from csv file to table temp_cricket and set display of headers as true
+LOAD DATA LOCAL INPATH '/home/data/hive/Batting.csv' OVERWRITE INTO TABLE bat_tbl;
+
+SET hive.cli.print.header = true;
+
+// Display the records
+SELECT *FROM bat_tbl LIMIT 100;
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+### Questions
+
+//1. Display year and maximum runs scored in each year.
+SELECT yearID, max(R) FROM bat_tbl GROUP BY yearID;
+
+//2. Display player_id,year and maximum runs scored in each year.
+SELECT playerID, yearID, max(R) FROM bat_tbl GROUP BY playerID, yearID;
+
+//3. Find out each and every year how many centuries was scored.
+SELECT yearID, COUNT(R) AS no_of_centuries FROM bat_tbl WHERE R>=100 GROUP BY yearID ORDER BY yearID DESC;
+
+//4. Find out how many centuries was scored in each and every year by the each and every different TeamID
+SELECT yearID, teamID, COUNT(*) AS no_of_centuries FROM bat_tbl WHERE R>=100 GROUP BY yearID, teamID;
