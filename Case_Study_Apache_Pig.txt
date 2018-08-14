@@ -1,0 +1,109 @@
+--Loading data from hdfs location
+
+RAW_DATA = load '/user/Jig12673/GradedAssignment/Chapter6/Airlines_data.csv' using PigStorage(',') 
+ as (year: int, month: int, day: int, dow: int, dtime: int, sdtime: int, arrtime: int, satime: int, carrier: chararray,
+    fn: int, tn: chararray, etime: int, setime: int, airtime: int, adelay: int, ddelay: int, scode: chararray,dcode:chararray,dist: int, tintime: int, 
+    touttime: int, cancel: chararray, cancelcode: chararray, diverted: int, cdelay: int, wdelay: int, ndelay: int, sdelay: int, latedelay: int);
+
+--filter by year 2008
+
+RAW_DATA_2008 = filter RAW_DATA by year == 2008;
+
+--Grouping the data based on the source airport code (scode)
+
+SOURCE_IATA_GROUP = group RAW_DATA_2008 by (scode,month);
+
+--count of outbound traffic for the airport code/source code/departure airport code.
+
+OUTBOUND_IATA_COUNT = foreach SOURCE_IATA_GROUP generate group as IATA, COUNT(RAW_DATA_2008) AS num_out_flights;
+total_out = foreach OUTBOUND_IATA_COUNT generate flatten(IATA),num_out_flights ;
+--dump total_out;
+
+--Grouping the data based on the destination airport code (dcode)
+DEST_IATA_GROUP = group RAW_DATA_2008 by (dcode,month);
+
+
+--count of outbound traffic for that airport code/source code/departure airport code
+INBOUND_IATA_COUNT = foreach DEST_IATA_GROUP generate group as IATA, COUNT(RAW_DATA_2008) AS num_in_flights;
+total_in = foreach INBOUND_IATA_COUNT generate flatten(IATA),num_in_flights;
+--dump total_in;
+
+
+--union operation on these 2 tables
+unioned = union total_in, total_out;
+
+--We get the monthwise grouping of each airport by following command
+grouped = group unioned by ($0,$1);
+
+--Finally counting the 3rd field of each tuple in every bag
+final_count = foreach grouped generate group, SUM(unioned.$2);
+--dump final_count;
+
+--NOW flatten the above
+flat_data = foreach final_count generate flatten(group), $1;
+--dump flat_data;
+
+--Now we have a month wise total of inbound and outbound count for every airport code.
+
+describe flat_data;
+grouped2 = group flat_data by $1;
+--describe grouped2;
+--dump grouped2;
+
+--pick the top 20 tuple from each bag, we use a built in function called TOP
+top20 = foreach grouped2 generate group, TOP(20,2,flat_data);
+--dump top20;
+store top20 into 'top20_airports_per_month';
+
+
+
+--For second part (b) of the problem
+
+/*--udf register
+register /home/cloudera/mrinmoy/Bigdata/Chapter6/Pig/datafu-pig-incubating-1.3.1.jar;
+
+define Median datafu.pig.stats.StreamingMedian();*/
+
+--group the dataset by year and unique carrier
+grouped3 = group RAW_DATA by (year,carrier);
+
+--calculate volume
+data = foreach grouped3 generate group, COUNT(RAW_DATA) as volume;
+
+--flatten the data
+flat_data = foreach data generate FLATTEN($0),volume;
+
+--evaluate the necesary fields
+data_1 = foreach flat_data generate $0 as year, $1 as carrier, $2 as volume, LOG($2) as log_volume;
+
+--group data
+grouped4 = group data_1 by carrier;
+
+data_2 = foreach grouped4 generate group as carrier, SUM(data_1.volume) as total_volume, AVG(data_1.volume) as avg_volume;
+
+data_final = RANK data_2 BY avg_volume desc;
+
+--store data into hdfs
+store data_final into 'carrier_volume';
+
+/* data_final2 = foreach grouped4 generate group as carrier, SUM(data_1.volume) as total_volume, Median(data_1.volume) as med_volume;
+
+data_final3 = RANK data_final2 BY med_volume;*/
+
+
+
+----------Qusetions------------------------------------------------------
+
+--a)Find out top 20 airports by total volume of flights per month in the year 2008
+--- Check the folder top20_airports_per_month.
+
+--b)Rank the carriers by their average volume across years
+---
+
+
+
+/* Case Study Description: 
+Airline Data Analysis with Pig:
+Perform data analysis with Pig latin script in hadoop to find the number of inbound, outbound and all flights from the airports mentioned and evaluate the top 20
+airports per month based on total traffic (inbound + outbound). Also rank the carriers as per their average volume. Find out the fraction of delayed flights due to 
+any of the reasons like delay in deperture, delay due to bad weather, delay due to carrier itself etc.*/
